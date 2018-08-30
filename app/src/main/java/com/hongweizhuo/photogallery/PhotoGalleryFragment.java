@@ -66,12 +66,9 @@ public class PhotoGalleryFragment extends Fragment {
                 super.onScrollStateChanged(recyclerView, newState);
 
                 if (!recyclerView.canScrollVertically(1)) {
-                    Log.i(TAG, "We reached the end!!!!");
-
                     if (!mIsLoading) {
                         new FetchPhotosTask().execute();
                     }
-
                 }
 
             }
