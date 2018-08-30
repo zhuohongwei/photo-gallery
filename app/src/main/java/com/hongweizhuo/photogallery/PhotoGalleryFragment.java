@@ -3,6 +3,7 @@ package com.hongweizhuo.photogallery;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -27,6 +28,9 @@ public class PhotoGalleryFragment extends Fragment {
     private RecyclerView mRecyclerView;
     private PhotoAdapter mPhotoAdapter;
 
+    private int mPage = 1;
+    private boolean mIsLoading = false;
+
     public PhotoGalleryFragment() {
     }
 
@@ -41,7 +45,9 @@ public class PhotoGalleryFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
+
         new FetchPhotosTask().execute();
+
     }
 
     @Override
@@ -52,6 +58,24 @@ public class PhotoGalleryFragment extends Fragment {
 
         mRecyclerView = (RecyclerView) view.findViewById(R.id.recycler_view_photo_gallery);
         mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 3));
+
+
+        mRecyclerView.setOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+
+                if (!recyclerView.canScrollVertically(1)) {
+                    Log.i(TAG, "We reached the end!!!!");
+
+                    if (!mIsLoading) {
+                        new FetchPhotosTask().execute();
+                    }
+
+                }
+
+            }
+        });
 
         setupAdapter();
 
@@ -76,6 +100,10 @@ public class PhotoGalleryFragment extends Fragment {
 
         public void setPhotos(List<Photo> photos) {
             mPhotos = photos;
+        }
+
+        public void appendPhotos(List<Photo> photos) {
+            mPhotos.addAll(photos);
         }
 
         @NonNull
@@ -111,32 +139,42 @@ public class PhotoGalleryFragment extends Fragment {
         }
 
         public void bindPhoto(Photo photo) {
-
-            if (photo.getUrl().length() % 2 == 0) {
-                itemView.setBackgroundColor(Color.WHITE);
-
-            } else {
-                itemView.setBackgroundColor(Color.GRAY);
-            }
-
             mTextView.setText(photo.getCaption());
-
         }
 
     }
 
     private class FetchPhotosTask extends AsyncTask<Void, Void, List<Photo>> {
+
         @Override
-        protected void onPostExecute(List<Photo> photos) {
-            if (isAdded()) {
-                mPhotoAdapter.setPhotos(photos);
-                mPhotoAdapter.notifyDataSetChanged();
-            }
+        protected void onPreExecute() {
+            mIsLoading = true;
         }
 
         @Override
-        protected List<Photo> doInBackground(Void... voids) {
-            return new FlickrFetcher().fetchPhotos();
+        protected void onPostExecute(List<Photo> photos) {
+
+            mPage++;
+            mIsLoading = false;
+
+            if (!isAdded()) {
+                return;
+            }
+
+            if (mPage == 1) {
+                mPhotoAdapter.setPhotos(photos);
+
+            } else {
+                mPhotoAdapter.appendPhotos(photos);
+            }
+
+            mPhotoAdapter.notifyDataSetChanged();
+
+        }
+
+        @Override
+        protected List<Photo> doInBackground(Void... args) {
+            return new FlickrFetcher().fetchPhotos(mPage);
         }
 
     }

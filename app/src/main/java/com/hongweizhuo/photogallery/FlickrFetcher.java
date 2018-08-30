@@ -18,7 +18,7 @@ public class FlickrFetcher {
     private static final String TAG = "FlickrFetcher";
     private static final String API_KEY = "03c8039e2101d9b6324f9bd02cc87c82";
 
-    public List<Photo> fetchPhotos() {
+    public List<Photo> fetchPhotos(int page) {
 
         List<Photo> photos = new ArrayList<>();
 
@@ -31,12 +31,13 @@ public class FlickrFetcher {
                     .appendQueryParameter("format", "json")
                     .appendQueryParameter("nojsoncallback","1")
                     .appendQueryParameter("extras", "url_s")
+                    .appendQueryParameter("page", page+"")
                     .build().toString();
 
             String jsonString = getUrlString(url);
             parsePhotos(photos, jsonString);
 
-            Log.i(TAG, "Fetched contents of URL: " + photos);
+            Log.i(TAG, "Fetched contents of URL: " + jsonString);
 
         } catch (IOException ioe) {
             Log.e(TAG, "Failed to fetch URL: ", ioe);
