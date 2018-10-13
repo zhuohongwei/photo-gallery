@@ -1,10 +1,15 @@
 package com.hongweizhuo.photogallery;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -27,6 +32,7 @@ public class PhotoGalleryFragment extends Fragment {
 
     private RecyclerView mRecyclerView;
     private PhotoAdapter mPhotoAdapter;
+    private ThumbnailDownloader<PhotoViewHolder> mThumbnailDownloader;
 
     private int mPage = 1;
     private boolean mIsLoading = false;
@@ -46,8 +52,38 @@ public class PhotoGalleryFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
 
+        mThumbnailDownloader = new ThumbnailDownloader<>(new Handler());
+
+        mThumbnailDownloader.setThumbnailDownloadListener(new ThumbnailDownloader.ThumbnailDownloadListener<PhotoViewHolder>() {
+            @Override
+            public void onThumbnailDownloaded(PhotoViewHolder target, Bitmap thumbnail) {
+                Drawable drawable = new BitmapDrawable(getResources(), thumbnail);
+                target.bindDrawable(drawable);
+            }
+
+        });
+
+        mThumbnailDownloader.start();
+        mThumbnailDownloader.getLooper();
+
+
+        Log.i(TAG, "Background thread started...");
+
         new FetchPhotosTask().execute();
 
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        mThumbnailDownloader.quit();
+        Log.i(TAG, "Background thread destroyed...");
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        mThumbnailDownloader.clearQueue();
     }
 
     @Override
@@ -113,8 +149,23 @@ public class PhotoGalleryFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull PhotoViewHolder holder, int position) {
+
             Photo photo = mPhotos.get(position);
-            holder.bindPhoto(photo);
+            mThumbnailDownloader.queueThumnbnail(holder, photo.getUrl());
+
+            //preload previous 10 photos and next 10 photos
+
+            for (int i = position + 1; i < position + 11 && i < mPhotos.size(); i++) {
+                Photo nexPhoto = mPhotos.get(position);
+                mThumbnailDownloader.preloadThumbnail(nexPhoto.getUrl());
+            }
+
+            for (int i = position - 1; i > position - 11 && i >= 0; i--) {
+                Photo previousPhoto = mPhotos.get(position);
+                mThumbnailDownloader.preloadThumbnail(previousPhoto.getUrl());
+            }
+
+            holder.bindDrawable(null);
         }
 
         @Override
@@ -127,16 +178,14 @@ public class PhotoGalleryFragment extends Fragment {
     private class PhotoViewHolder extends RecyclerView.ViewHolder {
 
         private ImageView mImageView;
-        private TextView mTextView;
 
         public PhotoViewHolder(View itemView) {
             super(itemView);
             mImageView = itemView.findViewById(R.id.image_view_photo);
-            mTextView = itemView.findViewById(R.id.text_view_caption);
         }
 
-        public void bindPhoto(Photo photo) {
-            mTextView.setText(photo.getCaption());
+        public void bindDrawable(Drawable drawable) {
+            mImageView.setImageDrawable(drawable);
         }
 
     }
