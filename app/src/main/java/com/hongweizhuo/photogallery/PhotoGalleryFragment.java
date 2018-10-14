@@ -30,6 +30,8 @@ public class PhotoGalleryFragment extends Fragment {
 
     private RecyclerView mRecyclerView;
     private PhotoAdapter mPhotoAdapter;
+    private SearchView mSearchView;
+
     private ThumbnailDownloader<PhotoViewHolder> mThumbnailDownloader;
 
     private int mPage = 1;
@@ -124,14 +126,23 @@ public class PhotoGalleryFragment extends Fragment {
         inflater.inflate(R.menu.fragment_photo_gallery,menu);
 
         MenuItem searchItem = menu.findItem(R.id.menu_item_search);
-        SearchView searchView = (SearchView) searchItem.getActionView();
+        mSearchView = (SearchView) searchItem.getActionView();
 
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+        mSearchView.setOnSearchClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String query = QueryPreferences.getStoredQuery(getActivity());
+                mSearchView.setQuery(query, false);
+            }
+        });
+
+        mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
                 mPage = 1;
                 QueryPreferences.setStoredQuery(getActivity(), query);
                 updatePhotos();
+                mSearchView.clearFocus();
                 return true;
             }
 
@@ -151,7 +162,9 @@ public class PhotoGalleryFragment extends Fragment {
             case R.id.menu_item_clear:
                 mPage = 1;
                 QueryPreferences.setStoredQuery(getActivity(), null);
+                mSearchView.setQuery(null, false);
                 updatePhotos();
+                mSearchView.clearFocus();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
