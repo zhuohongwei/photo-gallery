@@ -1,28 +1,26 @@
 package com.hongweizhuo.photogallery;
 
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.SearchView;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.TextView;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,7 +33,9 @@ public class PhotoGalleryFragment extends Fragment {
     private ThumbnailDownloader<PhotoViewHolder> mThumbnailDownloader;
 
     private int mPage = 1;
+
     private boolean mIsLoading = false;
+    private FetchPhotosTask mFetchTask = null;
 
     public PhotoGalleryFragment() {
     }
@@ -50,7 +50,9 @@ public class PhotoGalleryFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setRetainInstance(true);
+        setHasOptionsMenu(true);
 
         mThumbnailDownloader = new ThumbnailDownloader<>(new Handler());
 
@@ -66,10 +68,9 @@ public class PhotoGalleryFragment extends Fragment {
         mThumbnailDownloader.start();
         mThumbnailDownloader.getLooper();
 
-
         Log.i(TAG, "Background thread started...");
 
-        new FetchPhotosTask().execute();
+        updatePhotos();
 
     }
 
@@ -103,7 +104,7 @@ public class PhotoGalleryFragment extends Fragment {
 
                 if (!recyclerView.canScrollVertically(1)) {
                     if (!mIsLoading) {
-                        new FetchPhotosTask().execute();
+                        updatePhotos();
                     }
                 }
 
@@ -116,11 +117,64 @@ public class PhotoGalleryFragment extends Fragment {
 
     }
 
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+
+        inflater.inflate(R.menu.fragment_photo_gallery,menu);
+
+        MenuItem searchItem = menu.findItem(R.id.menu_item_search);
+        SearchView searchView = (SearchView) searchItem.getActionView();
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                mPage = 1;
+                QueryPreferences.setStoredQuery(getActivity(), query);
+                updatePhotos();
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                mPage = 1;
+                return false;
+            }
+
+        });
+
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.menu_item_clear:
+                mPage = 1;
+                QueryPreferences.setStoredQuery(getActivity(), null);
+                updatePhotos();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
     private void setupAdapter() {
         if (isAdded()) {
             mPhotoAdapter = new PhotoAdapter(new ArrayList<Photo>());
             mRecyclerView.setAdapter(mPhotoAdapter);
         }
+    }
+
+    private void updatePhotos() {
+
+        if (mFetchTask != null && mFetchTask.getStatus() != AsyncTask.Status.FINISHED) {
+            mFetchTask.cancel(true);
+        }
+
+        String query = QueryPreferences.getStoredQuery(getActivity());
+        mFetchTask = new FetchPhotosTask(query);
+        mFetchTask.execute();
+
     }
 
     private class PhotoAdapter extends RecyclerView.Adapter<PhotoViewHolder> {
@@ -192,6 +246,12 @@ public class PhotoGalleryFragment extends Fragment {
 
     private class FetchPhotosTask extends AsyncTask<Void, Void, List<Photo>> {
 
+        private String mQuery;
+
+        public FetchPhotosTask(String query) {
+            mQuery = query;
+        }
+
         @Override
         protected void onPreExecute() {
             mIsLoading = true;
@@ -199,9 +259,6 @@ public class PhotoGalleryFragment extends Fragment {
 
         @Override
         protected void onPostExecute(List<Photo> photos) {
-
-            mPage++;
-            mIsLoading = false;
 
             if (!isAdded()) {
                 return;
@@ -214,13 +271,20 @@ public class PhotoGalleryFragment extends Fragment {
                 mPhotoAdapter.appendPhotos(photos);
             }
 
+            mPage++;
+            mIsLoading = false;
+
             mPhotoAdapter.notifyDataSetChanged();
 
         }
 
         @Override
         protected List<Photo> doInBackground(Void... args) {
-            return new FlickrFetcher().fetchPhotos(mPage);
+            if (mQuery == null) {
+                return new FlickrFetcher().fetchRecentPhotos(mPage);
+            } else {
+                return new FlickrFetcher().search(mQuery, mPage);
+            }
         }
 
     }
