@@ -20,6 +20,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,7 @@ public class PhotoGalleryFragment extends Fragment {
     private RecyclerView mRecyclerView;
     private PhotoAdapter mPhotoAdapter;
     private SearchView mSearchView;
+    private ProgressBar mProgressBar;
 
     private ThumbnailDownloader<PhotoViewHolder> mThumbnailDownloader;
 
@@ -72,8 +74,6 @@ public class PhotoGalleryFragment extends Fragment {
 
         Log.i(TAG, "Background thread started...");
 
-        updatePhotos();
-
     }
 
     @Override
@@ -95,6 +95,9 @@ public class PhotoGalleryFragment extends Fragment {
 
         View view = inflater.inflate(R.layout.fragment_photo_gallery, container, false);
 
+        mProgressBar = (ProgressBar) view.findViewById(R.id.loading_view_photo_gallery);
+        mProgressBar.setVisibility(View.GONE);
+
         mRecyclerView = (RecyclerView) view.findViewById(R.id.recycler_view_photo_gallery);
         mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 3));
 
@@ -114,6 +117,8 @@ public class PhotoGalleryFragment extends Fragment {
         });
 
         setupAdapter();
+
+        updatePhotos();
 
         return view;
 
@@ -139,16 +144,22 @@ public class PhotoGalleryFragment extends Fragment {
         mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
+
                 mPage = 1;
+                mPhotoAdapter.setPhotos(new ArrayList<Photo>());
+                mPhotoAdapter.notifyDataSetChanged();
+
                 QueryPreferences.setStoredQuery(getActivity(), query);
+
                 updatePhotos();
+
                 mSearchView.clearFocus();
+
                 return true;
             }
 
             @Override
             public boolean onQueryTextChange(String newText) {
-                mPage = 1;
                 return false;
             }
 
@@ -160,11 +171,18 @@ public class PhotoGalleryFragment extends Fragment {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.menu_item_clear:
+
                 mPage = 1;
+                mPhotoAdapter.setPhotos(new ArrayList<Photo>());
+                mPhotoAdapter.notifyDataSetChanged();
+
                 QueryPreferences.setStoredQuery(getActivity(), null);
                 mSearchView.setQuery(null, false);
+
                 updatePhotos();
+
                 mSearchView.clearFocus();
+
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -268,6 +286,9 @@ public class PhotoGalleryFragment extends Fragment {
         @Override
         protected void onPreExecute() {
             mIsLoading = true;
+            if (mPhotoAdapter.getItemCount() == 0) {
+                mProgressBar.setVisibility(View.VISIBLE);
+            }
         }
 
         @Override
@@ -287,6 +308,7 @@ public class PhotoGalleryFragment extends Fragment {
             mPage++;
             mIsLoading = false;
 
+            mProgressBar.setVisibility(View.GONE);
             mPhotoAdapter.notifyDataSetChanged();
 
         }
